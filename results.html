@@ -130,7 +130,7 @@
             </div>
             <p class="result-meta">
               ${isVetoed
-                ? `${r.vetoes} Veto${r.vetoes !== 1 ? 's' : ''} → eliminiert`
+                ? `eliminiert`
                 : `${r.voteCount} Stimme${r.voteCount !== 1 ? 'n' : ''} · Ø ${r.voteCount > 0 ? (r.score / r.voteCount).toFixed(1) : '—'}`
               }
             </p>
