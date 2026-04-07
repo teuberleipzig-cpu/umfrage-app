@@ -17,16 +17,16 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-  import { getFirestore, collection, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+  import { getFirestore, collection, getDocs, getDoc, doc, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
   // ERSETZE HIER DEINE FIREBASE CONFIG
   const firebaseConfig = {
-    apiKey: "AIzaSyCV4oMSTOjg0QgfspLChFkNpUC--LRgUiQ",
-    authDomain: "bastipriv-6c734.firebaseapp.com",
-    projectId: "bastipriv-6c734",
-    storageBucket: "bastipriv-6c734.firebasestorage.app",
-    messagingSenderId: "202665372147",
-    appId: "1:202665372147:web:8b780a20b716dd375d4a86"
+    apiKey: "AIza...",
+    authDomain: "...",
+    projectId: "...",
+    storageBucket: "...",
+    messagingSenderId: "...",
+    appId: "..."
   };
 
   const app = initializeApp(firebaseConfig);
@@ -44,22 +44,28 @@
     }
 
     try {
-      // Umfrage laden
-      const allSurveys = await getDocs(collection(db, 'surveys'));
-      let surveyData = null;
-      allSurveys.forEach(d => { if (d.id === surveyId) surveyData = { id: d.id, ...d.data() }; });
-
-      if (!surveyData) {
+      // Umfrage direkt über ID laden
+      const surveySnap = await getDoc(doc(db, 'surveys', surveyId));
+      if (!surveySnap.exists()) {
         appEl.innerHTML = '<div class="status error">Umfrage nicht gefunden.</div>';
         return;
       }
+      const surveyData = { id: surveySnap.id, ...surveySnap.data() };
 
       // Votes laden
       const votesQuery = query(collection(db, 'votes'), where('surveyId', '==', surveyId));
       const votesSnap = await getDocs(votesQuery);
 
+      // Deduplizieren: pro tokenId nur einen Vote zählen
+      const seenTokens = new Set();
       const votes = [];
-      votesSnap.forEach(d => votes.push(d.data()));
+      votesSnap.forEach(d => {
+        const data = d.data();
+        if (!seenTokens.has(data.tokenId)) {
+          seenTokens.add(data.tokenId);
+          votes.push(data);
+        }
+      });
 
       renderResults(surveyData, votes);
     } catch (err) {
@@ -68,9 +74,7 @@
   }
 
   function renderResults(survey, votes) {
-    // Auswertung berechnen
-    const results = {}; // { optionName: { score: number, vetoes: number, voteCount: number } }
-
+    const results = {};
     survey.options.forEach(opt => {
       results[opt] = { score: 0, vetoes: 0, voteCount: 0 };
     });
@@ -88,14 +92,12 @@
       });
     });
 
-    // Sortieren: zuerst nicht-veto nach Score, dann veto-Optionen
     const nonVeto = survey.options
       .filter(opt => results[opt].vetoes === 0)
       .sort((a, b) => results[b].score - results[a].score);
 
     const vetoed = survey.options.filter(opt => results[opt].vetoes > 0);
     const sorted = [...nonVeto, ...vetoed];
-
     const maxScore = Math.max(...nonVeto.map(o => results[o].score), 1);
 
     let html = '';

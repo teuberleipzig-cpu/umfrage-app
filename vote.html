@@ -15,16 +15,16 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-  import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+  import { getFirestore, collection, query, where, getDocs, addDoc, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
   // ERSETZE HIER DEINE FIREBASE CONFIG
   const firebaseConfig = {
-    apiKey: "AIzaSyCV4oMSTOjg0QgfspLChFkNpUC--LRgUiQ",
-    authDomain: "bastipriv-6c734.firebaseapp.com",
-    projectId: "bastipriv-6c734",
-    storageBucket: "bastipriv-6c734.firebasestorage.app",
-    messagingSenderId: "202665372147",
-    appId: "1:202665372147:web:8b780a20b716dd375d4a86"
+    apiKey: "AIza...",
+    authDomain: "...",
+    projectId: "...",
+    storageBucket: "...",
+    messagingSenderId: "...",
+    appId: "..."
   };
 
   const app = initializeApp(firebaseConfig);
@@ -35,8 +35,7 @@
   const tokenId = params.get('token');
   const surveyId = params.get('survey');
 
-  // Merke die aktuellen Auswahlen
-  const selections = {}; // { optionName: 'veto' | 1 | 2 | 3 | 4 }
+  const selections = {};
   let tokenDocId = null;
   let surveyData = null;
 
@@ -47,8 +46,12 @@
     }
 
     try {
-      // 1. Token prüfen
-      const tokenQuery = query(collection(db, 'tokens'), where('tokenId', '==', tokenId), where('surveyId', '==', surveyId));
+      // 1. Token prüfen – direkt über tokenId-Feld suchen
+      const tokenQuery = query(
+        collection(db, 'tokens'),
+        where('tokenId', '==', tokenId),
+        where('surveyId', '==', surveyId)
+      );
       const tokenSnap = await getDocs(tokenQuery);
 
       if (tokenSnap.empty) {
@@ -62,24 +65,31 @@
 
       // 2. Bereits abgestimmt?
       if (tokenData.used) {
-        showResults(surveyId, true);
+        window.location.href = `results.html?survey=${surveyId}&already=1`;
         return;
       }
 
-      // 3. Umfrage laden
-      const surveyQuery = query(collection(db, 'surveys'), where('__name__', '==', surveyId));
-      const { getDoc, doc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
-      const { getFirestore: gf } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+      // 3. Prüfen ob für diesen Token schon ein Vote existiert (Sicherheitsnetz)
+      const existingVoteQuery = query(
+        collection(db, 'votes'),
+        where('tokenId', '==', tokenId),
+        where('surveyId', '==', surveyId)
+      );
+      const existingVoteSnap = await getDocs(existingVoteQuery);
+      if (!existingVoteSnap.empty) {
+        // Vote existiert bereits, aber Token war noch nicht als used markiert – jetzt nachholen
+        await updateDoc(doc(db, 'tokens', tokenDocId), { used: true });
+        window.location.href = `results.html?survey=${surveyId}&already=1`;
+        return;
+      }
 
-      // Umfrage direkt über ID laden
-      const allSurveys = await getDocs(collection(db, 'surveys'));
-      surveyData = null;
-      allSurveys.forEach(d => { if (d.id === surveyId) surveyData = { id: d.id, ...d.data() }; });
-
-      if (!surveyData) {
+      // 4. Umfrage direkt über ID laden
+      const surveySnap = await getDoc(doc(db, 'surveys', surveyId));
+      if (!surveySnap.exists()) {
         appEl.innerHTML = '<div class="status error">Umfrage nicht gefunden.</div>';
         return;
       }
+      surveyData = { id: surveySnap.id, ...surveySnap.data() };
 
       renderVoteForm();
     } catch (err) {
@@ -98,11 +108,11 @@
         <div class="vote-option">
           <h3>${escapeHtml(option)}</h3>
           <div class="vote-buttons">
-            <button class="vote-btn veto" data-option="${escapeHtml(option)}" data-value="veto" onclick="selectVote(this)">Veto</button>
-            <button class="vote-btn score-1" data-option="${escapeHtml(option)}" data-value="1" onclick="selectVote(this)">1</button>
-            <button class="vote-btn score-2" data-option="${escapeHtml(option)}" data-value="2" onclick="selectVote(this)">2</button>
-            <button class="vote-btn score-3" data-option="${escapeHtml(option)}" data-value="3" onclick="selectVote(this)">3</button>
-            <button class="vote-btn score-4" data-option="${escapeHtml(option)}" data-value="4" onclick="selectVote(this)">4</button>
+            <button class="vote-btn veto"    data-option="${escapeHtml(option)}" data-value="veto" onclick="selectVote(this)">Veto</button>
+            <button class="vote-btn score-1" data-option="${escapeHtml(option)}" data-value="1"    onclick="selectVote(this)">1</button>
+            <button class="vote-btn score-2" data-option="${escapeHtml(option)}" data-value="2"    onclick="selectVote(this)">2</button>
+            <button class="vote-btn score-3" data-option="${escapeHtml(option)}" data-value="3"    onclick="selectVote(this)">3</button>
+            <button class="vote-btn score-4" data-option="${escapeHtml(option)}" data-value="4"    onclick="selectVote(this)">4</button>
           </div>
         </div>`;
     });
@@ -120,30 +130,34 @@
   window.selectVote = function(btn) {
     const option = btn.dataset.option;
     const value = btn.dataset.value;
-
-    // Alle Buttons dieser Option zurücksetzen
     document.querySelectorAll(`[data-option="${option}"]`).forEach(b => b.classList.remove('selected'));
-
-    // Diesen Button aktivieren
     btn.classList.add('selected');
-
-    // Auswahl speichern (Zahlen als Int)
     selections[option] = value === 'veto' ? 'veto' : parseInt(value, 10);
   };
 
   window.submitVote = async function() {
     const statusEl = document.getElementById('vote-status');
 
-    // Prüfen: alle Optionen bewertet?
     const missingOptions = surveyData.options.filter(o => selections[o] === undefined);
     if (missingOptions.length > 0) {
-      statusEl.innerHTML = `<div class="status error">Bitte alle Optionen bewerten! Fehlend: ${missingOptions.join(', ')}</div>`;
+      statusEl.innerHTML = `<div class="status error">Bitte alle Optionen bewerten! Fehlend: ${missingOptions.map(escapeHtml).join(', ')}</div>`;
       return;
     }
 
+    // Button deaktivieren, damit nicht doppelt abgeschickt wird
+    const submitBtn = document.querySelector('.btn-primary');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Wird gespeichert...';
     statusEl.innerHTML = '<div class="status info">Wird gespeichert...</div>';
 
     try {
+      // Nochmals prüfen ob Token noch nicht used ist (Race-Condition-Schutz)
+      const tokenSnap = await getDoc(doc(db, 'tokens', tokenDocId));
+      if (tokenSnap.data().used) {
+        window.location.href = `results.html?survey=${surveyId}&already=1`;
+        return;
+      }
+
       // Vote speichern
       await addDoc(collection(db, 'votes'), {
         surveyId,
@@ -152,23 +166,19 @@
         createdAt: serverTimestamp()
       });
 
-      // Token als "used" markieren
-      const { doc, updateDoc: upd } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
-      const tokenRef = doc(db, 'tokens', tokenDocId);
-      await upd(tokenRef, { used: true });
+      // Token als used markieren
+      await updateDoc(doc(db, 'tokens', tokenDocId), { used: true });
 
       statusEl.innerHTML = '<div class="status success">✓ Deine Stimme wurde gespeichert!</div>';
-
-      // Nach 1.5s zu Ergebnissen
-      setTimeout(() => showResults(surveyId, false), 1500);
+      setTimeout(() => {
+        window.location.href = `results.html?survey=${surveyId}`;
+      }, 1500);
     } catch (err) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Abstimmung abschicken';
       statusEl.innerHTML = `<div class="status error">Fehler beim Speichern: ${err.message}</div>`;
     }
   };
-
-  async function showResults(sId, alreadyVoted) {
-    window.location.href = `results.html?survey=${sId}${alreadyVoted ? '&already=1' : ''}`;
-  }
 
   function escapeHtml(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
