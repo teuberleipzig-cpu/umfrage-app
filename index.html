@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Umfrage-App</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="container">
+  <h1>📊 Umfragen</h1>
+  <p class="subtitle">Alle aktiven Abstimmungen</p>
+
+  <div style="margin-bottom: 24px;">
+    <a href="admin.html" class="btn btn-primary">+ Neue Umfrage erstellen</a>
+  </div>
+
+  <div id="surveys-list">
+    <div class="loading">Lädt Umfragen...</div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getFirestore, collection, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+  // ERSETZE HIER DEINE FIREBASE CONFIG
+  const firebaseConfig = {
+    apiKey: "AIzaSyCV4oMSTOjg0QgfspLChFkNpUC--LRgUiQ",
+    authDomain: "bastipriv-6c734.firebaseapp.com",
+    projectId: "bastipriv-6c734",
+    storageBucket: "bastipriv-6c734.firebasestorage.app",
+    messagingSenderId: "202665372147",
+    appId: "1:202665372147:web:8b780a20b716dd375d4a86"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  async function loadSurveys() {
+    const list = document.getElementById('surveys-list');
+
+    try {
+      const q = query(collection(db, 'surveys'), orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        list.innerHTML = '<div class="card"><p style="color: var(--text2)">Noch keine Umfragen vorhanden. <a href="admin.html" style="color: var(--accent)">Erste Umfrage erstellen →</a></p></div>';
+        return;
+      }
+
+      let html = '';
+      snapshot.forEach(doc => {
+        const survey = doc.data();
+        const date = survey.createdAt?.toDate?.()?.toLocaleDateString('de-DE') || '';
+        html += `
+          <div class="card">
+            <h3>${escapeHtml(survey.title)}</h3>
+            <p class="meta">${survey.options.length} Optionen · ${date}</p>
+            <div style="display: flex; gap: 8px;">
+              <a href="results.html?survey=${doc.id}" class="btn btn-secondary btn-sm">Ergebnisse</a>
+              <a href="admin.html?edit=${doc.id}" class="btn btn-secondary btn-sm">Tokens verwalten</a>
+            </div>
+          </div>`;
+      });
+      list.innerHTML = html;
+    } catch (err) {
+      list.innerHTML = `<div class="status error">Fehler beim Laden: ${err.message}</div>`;
+    }
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  loadSurveys();
+</script>
+</body>
+</html>

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Abstimmen – Umfrage-App</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="container">
+  <div id="app">
+    <div class="loading">Überprüfe deinen Abstimmungslink...</div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+  // ERSETZE HIER DEINE FIREBASE CONFIG
+  const firebaseConfig = {
+    apiKey: "AIzaSyCV4oMSTOjg0QgfspLChFkNpUC--LRgUiQ",
+    authDomain: "bastipriv-6c734.firebaseapp.com",
+    projectId: "bastipriv-6c734",
+    storageBucket: "bastipriv-6c734.firebasestorage.app",
+    messagingSenderId: "202665372147",
+    appId: "1:202665372147:web:8b780a20b716dd375d4a86"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  const appEl = document.getElementById('app');
+  const params = new URLSearchParams(window.location.search);
+  const tokenId = params.get('token');
+  const surveyId = params.get('survey');
+
+  // Merke die aktuellen Auswahlen
+  const selections = {}; // { optionName: 'veto' | 1 | 2 | 3 | 4 }
+  let tokenDocId = null;
+  let surveyData = null;
+
+  async function init() {
+    if (!tokenId || !surveyId) {
+      appEl.innerHTML = '<div class="status error">Ungültiger Link. Bitte wende dich an den Admin.</div>';
+      return;
+    }
+
+    try {
+      // 1. Token prüfen
+      const tokenQuery = query(collection(db, 'tokens'), where('tokenId', '==', tokenId), where('surveyId', '==', surveyId));
+      const tokenSnap = await getDocs(tokenQuery);
+
+      if (tokenSnap.empty) {
+        appEl.innerHTML = '<div class="status error">❌ Ungültiger Token. Dieser Link ist nicht gültig.</div>';
+        return;
+      }
+
+      const tokenDoc = tokenSnap.docs[0];
+      tokenDocId = tokenDoc.id;
+      const tokenData = tokenDoc.data();
+
+      // 2. Bereits abgestimmt?
+      if (tokenData.used) {
+        showResults(surveyId, true);
+        return;
+      }
+
+      // 3. Umfrage laden
+      const surveyQuery = query(collection(db, 'surveys'), where('__name__', '==', surveyId));
+      const { getDoc, doc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+      const { getFirestore: gf } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+
+      // Umfrage direkt über ID laden
+      const allSurveys = await getDocs(collection(db, 'surveys'));
+      surveyData = null;
+      allSurveys.forEach(d => { if (d.id === surveyId) surveyData = { id: d.id, ...d.data() }; });
+
+      if (!surveyData) {
+        appEl.innerHTML = '<div class="status error">Umfrage nicht gefunden.</div>';
+        return;
+      }
+
+      renderVoteForm();
+    } catch (err) {
+      appEl.innerHTML = `<div class="status error">Fehler: ${err.message}</div>`;
+    }
+  }
+
+  function renderVoteForm() {
+    let html = `
+      <h1>${escapeHtml(surveyData.title)}</h1>
+      <p class="subtitle">Bewerte jede Option. Veto eliminiert eine Option vollständig.</p>
+      <div id="vote-options">`;
+
+    surveyData.options.forEach(option => {
+      html += `
+        <div class="vote-option">
+          <h3>${escapeHtml(option)}</h3>
+          <div class="vote-buttons">
+            <button class="vote-btn veto" data-option="${escapeHtml(option)}" data-value="veto" onclick="selectVote(this)">Veto</button>
+            <button class="vote-btn score-1" data-option="${escapeHtml(option)}" data-value="1" onclick="selectVote(this)">1</button>
+            <button class="vote-btn score-2" data-option="${escapeHtml(option)}" data-value="2" onclick="selectVote(this)">2</button>
+            <button class="vote-btn score-3" data-option="${escapeHtml(option)}" data-value="3" onclick="selectVote(this)">3</button>
+            <button class="vote-btn score-4" data-option="${escapeHtml(option)}" data-value="4" onclick="selectVote(this)">4</button>
+          </div>
+        </div>`;
+    });
+
+    html += `
+      </div>
+      <div id="vote-status"></div>
+      <button class="btn btn-primary" onclick="submitVote()" style="margin-top: 8px; width: 100%; padding: 14px;">
+        Abstimmung abschicken
+      </button>`;
+
+    appEl.innerHTML = html;
+  }
+
+  window.selectVote = function(btn) {
+    const option = btn.dataset.option;
+    const value = btn.dataset.value;
+
+    // Alle Buttons dieser Option zurücksetzen
+    document.querySelectorAll(`[data-option="${option}"]`).forEach(b => b.classList.remove('selected'));
+
+    // Diesen Button aktivieren
+    btn.classList.add('selected');
+
+    // Auswahl speichern (Zahlen als Int)
+    selections[option] = value === 'veto' ? 'veto' : parseInt(value, 10);
+  };
+
+  window.submitVote = async function() {
+    const statusEl = document.getElementById('vote-status');
+
+    // Prüfen: alle Optionen bewertet?
+    const missingOptions = surveyData.options.filter(o => selections[o] === undefined);
+    if (missingOptions.length > 0) {
+      statusEl.innerHTML = `<div class="status error">Bitte alle Optionen bewerten! Fehlend: ${missingOptions.join(', ')}</div>`;
+      return;
+    }
+
+    statusEl.innerHTML = '<div class="status info">Wird gespeichert...</div>';
+
+    try {
+      // Vote speichern
+      await addDoc(collection(db, 'votes'), {
+        surveyId,
+        tokenId,
+        votes: selections,
+        createdAt: serverTimestamp()
+      });
+
+      // Token als "used" markieren
+      const { doc, updateDoc: upd } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+      const tokenRef = doc(db, 'tokens', tokenDocId);
+      await upd(tokenRef, { used: true });
+
+      statusEl.innerHTML = '<div class="status success">✓ Deine Stimme wurde gespeichert!</div>';
+
+      // Nach 1.5s zu Ergebnissen
+      setTimeout(() => showResults(surveyId, false), 1500);
+    } catch (err) {
+      statusEl.innerHTML = `<div class="status error">Fehler beim Speichern: ${err.message}</div>`;
+    }
+  };
+
+  async function showResults(sId, alreadyVoted) {
+    window.location.href = `results.html?survey=${sId}${alreadyVoted ? '&already=1' : ''}`;
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  init();
+</script>
+</body>
+</html>

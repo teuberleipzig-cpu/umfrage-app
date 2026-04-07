@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin – Umfrage-App</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="container">
+  <p><a href="index.html" style="color: var(--text2); text-decoration: none;">← Zurück</a></p>
+  <br>
+
+  <!-- TEIL 1: Neue Umfrage erstellen -->
+  <h1>Admin-Bereich</h1>
+  <p class="subtitle">Umfragen erstellen und Einmal-Links generieren</p>
+
+  <div class="card" id="create-section">
+    <h2>Neue Umfrage erstellen</h2>
+
+    <label>Titel der Umfrage</label>
+    <input type="text" id="survey-title" placeholder="z.B. Wohin fahren wir im Urlaub?">
+
+    <label>Optionen (eine pro Zeile)</label>
+    <textarea id="survey-options" rows="5" placeholder="Mallorca&#10;Kroatien&#10;Nordsee"></textarea>
+
+    <button class="btn btn-primary" onclick="createSurvey()">Umfrage erstellen</button>
+    <div id="create-status"></div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- TEIL 2: Tokens für Umfrage generieren -->
+  <div class="card" id="token-section">
+    <h2>Einmal-Links generieren</h2>
+    <p style="color: var(--text2); font-size: 14px; margin-bottom: 16px;">
+      Wähle eine Umfrage und gib an, für wie viele Personen du Links generieren möchtest.
+      Jeder Link kann nur einmal verwendet werden.
+    </p>
+
+    <label>Umfrage auswählen</label>
+    <select id="survey-select" style="width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 10px 14px; font-size: 14px; margin-bottom: 10px;">
+      <option value="">Lade Umfragen...</option>
+    </select>
+
+    <label>Anzahl Links</label>
+    <input type="text" id="token-count" value="5" placeholder="5">
+
+    <button class="btn btn-primary" onclick="generateTokens()">Links generieren</button>
+    <div id="token-status"></div>
+
+    <ul class="token-list" id="token-list"></ul>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getFirestore, collection, addDoc, getDocs, query, where, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+  // ERSETZE HIER DEINE FIREBASE CONFIG
+  const firebaseConfig = {
+    apiKey: "AIzaSyCV4oMSTOjg0QgfspLChFkNpUC--LRgUiQ",
+    authDomain: "bastipriv-6c734.firebaseapp.com",
+    projectId: "bastipriv-6c734",
+    storageBucket: "bastipriv-6c734.firebasestorage.app",
+    messagingSenderId: "202665372147",
+    appId: "1:202665372147:web:8b780a20b716dd375d4a86"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  // Umfragen für Select laden
+  async function loadSurveysIntoSelect() {
+    const select = document.getElementById('survey-select');
+    try {
+      const snapshot = await getDocs(query(collection(db, 'surveys'), orderBy('createdAt', 'desc')));
+      if (snapshot.empty) {
+        select.innerHTML = '<option value="">Keine Umfragen vorhanden – erst oben erstellen</option>';
+        return;
+      }
+      select.innerHTML = '<option value="">Umfrage wählen...</option>';
+      snapshot.forEach(doc => {
+        const opt = document.createElement('option');
+        opt.value = doc.id;
+        opt.textContent = doc.data().title;
+        select.appendChild(opt);
+      });
+    } catch (err) {
+      select.innerHTML = `<option value="">Fehler: ${err.message}</option>`;
+    }
+  }
+
+  // Umfrage erstellen
+  window.createSurvey = async function() {
+    const title = document.getElementById('survey-title').value.trim();
+    const optionsRaw = document.getElementById('survey-options').value.trim();
+    const statusEl = document.getElementById('create-status');
+
+    if (!title) { statusEl.innerHTML = '<div class="status error">Bitte einen Titel eingeben.</div>'; return; }
+
+    const options = optionsRaw.split('\n').map(o => o.trim()).filter(o => o.length > 0);
+    if (options.length < 2) { statusEl.innerHTML = '<div class="status error">Bitte mindestens 2 Optionen eingeben.</div>'; return; }
+
+    statusEl.innerHTML = '<div class="status info">Wird erstellt...</div>';
+
+    try {
+      const docRef = await addDoc(collection(db, 'surveys'), {
+        title,
+        options,
+        createdAt: serverTimestamp()
+      });
+
+      statusEl.innerHTML = `<div class="status success">✓ Umfrage erstellt! ID: <code>${docRef.id}</code></div>`;
+      document.getElementById('survey-title').value = '';
+      document.getElementById('survey-options').value = '';
+      loadSurveysIntoSelect(); // Select aktualisieren
+    } catch (err) {
+      statusEl.innerHTML = `<div class="status error">Fehler: ${err.message}</div>`;
+    }
+  };
+
+  // Tokens generieren
+  window.generateTokens = async function() {
+    const surveyId = document.getElementById('survey-select').value;
+    const count = parseInt(document.getElementById('token-count').value, 10);
+    const statusEl = document.getElementById('token-status');
+    const listEl = document.getElementById('token-list');
+
+    if (!surveyId) { statusEl.innerHTML = '<div class="status error">Bitte eine Umfrage wählen.</div>'; return; }
+    if (!count || count < 1 || count > 100) { statusEl.innerHTML = '<div class="status error">Anzahl muss zwischen 1 und 100 liegen.</div>'; return; }
+
+    statusEl.innerHTML = '<div class="status info">Generiere Links...</div>';
+    listEl.innerHTML = '';
+
+    // Basis-URL ermitteln (funktioniert lokal und auf GitHub Pages)
+    const baseUrl = window.location.origin + window.location.pathname.replace('admin.html', '');
+
+    try {
+      const tokens = [];
+      for (let i = 0; i < count; i++) {
+        const tokenId = generateTokenId();
+        await addDoc(collection(db, 'tokens'), {
+          tokenId,
+          surveyId,
+          used: false,
+          createdAt: serverTimestamp()
+        });
+        tokens.push(tokenId);
+      }
+
+      statusEl.innerHTML = `<div class="status success">✓ ${count} Links erstellt! Kopiere sie und verteile sie:</div>`;
+
+      tokens.forEach(tokenId => {
+        const url = `${baseUrl}vote.html?token=${tokenId}&survey=${surveyId}`;
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <span class="token-link">${url}</span>
+          <button class="btn btn-secondary btn-sm" onclick="copyText('${url}')">Kopieren</button>
+        `;
+        listEl.appendChild(li);
+      });
+    } catch (err) {
+      statusEl.innerHTML = `<div class="status error">Fehler: ${err.message}</div>`;
+    }
+  };
+
+  window.copyText = function(text) {
+    navigator.clipboard.writeText(text).then(() => alert('Link kopiert!')).catch(() => {
+      prompt('Link (manuell kopieren):', text);
+    });
+  };
+
+  function generateTokenId() {
+    // Zufälliger 20-stelliger Token
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < 20; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  }
+
+  // Beim Laden
+  loadSurveysIntoSelect();
+</script>
+</body>
+</html>

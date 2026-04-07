@@ -1,0 +1,315 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  
+  :root {
+    --bg: #0f0f0f;
+    --bg2: #1a1a1a;
+    --bg3: #242424;
+    --border: #2e2e2e;
+    --text: #e8e8e8;
+    --text2: #888;
+    --accent: #6366f1;
+    --accent-hover: #4f52d0;
+    --veto: #ef4444;
+    --veto-hover: #dc2626;
+    --score1: #3b82f6;
+    --score2: #22c55e;
+    --score3: #f59e0b;
+    --score4: #a855f7;
+    --radius: 10px;
+  }
+  
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    padding: 24px 16px;
+  }
+  
+  .container {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  
+  h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+  
+  .subtitle {
+    color: var(--text2);
+    margin-bottom: 32px;
+    font-size: 15px;
+  }
+  
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  
+  .card:hover {
+    border-color: #444;
+  }
+  
+  .card h3 {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  
+  .card .meta {
+    color: var(--text2);
+    font-size: 13px;
+    margin-bottom: 14px;
+  }
+  
+  /* Buttons */
+  .btn {
+    display: inline-block;
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+  }
+  
+  .btn-primary:hover {
+    background: var(--accent-hover);
+  }
+  
+  .btn-secondary {
+    background: var(--bg3);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  
+  .btn-secondary:hover {
+    background: #2e2e2e;
+  }
+  
+  .btn-sm {
+    padding: 6px 14px;
+    font-size: 13px;
+  }
+  
+  /* Forms */
+  input[type="text"], textarea {
+    width: 100%;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 10px 14px;
+    font-size: 14px;
+    outline: none;
+    margin-bottom: 10px;
+  }
+  
+  input[type="text"]:focus, textarea:focus {
+    border-color: var(--accent);
+  }
+  
+  label {
+    display: block;
+    font-size: 13px;
+    color: var(--text2);
+    margin-bottom: 6px;
+  }
+  
+  /* Vote buttons */
+  .vote-option {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  
+  .vote-option h3 {
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+  
+  .vote-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  
+  .vote-btn {
+    flex: 1;
+    min-width: 60px;
+    padding: 12px 8px;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 700;
+    text-align: center;
+    transition: all 0.15s;
+    color: white;
+  }
+  
+  .vote-btn.veto {
+    background: #2a1515;
+    border-color: #5a2020;
+    color: var(--veto);
+  }
+  
+  .vote-btn.veto:hover, .vote-btn.veto.selected {
+    background: var(--veto);
+    color: white;
+    border-color: var(--veto);
+  }
+  
+  .vote-btn.score-1 { background: #0f1c2e; border-color: #1e3a5f; color: var(--score1); }
+  .vote-btn.score-2 { background: #0d1f12; border-color: #1a3d24; color: var(--score2); }
+  .vote-btn.score-3 { background: #231a0c; border-color: #4a3210; color: var(--score3); }
+  .vote-btn.score-4 { background: #1f0f2e; border-color: #3d1f5f; color: var(--score4); }
+  
+  .vote-btn.score-1:hover, .vote-btn.score-1.selected { background: var(--score1); color: white; border-color: var(--score1); }
+  .vote-btn.score-2:hover, .vote-btn.score-2.selected { background: var(--score2); color: white; border-color: var(--score2); }
+  .vote-btn.score-3:hover, .vote-btn.score-3.selected { background: var(--score3); color: white; border-color: var(--score3); }
+  .vote-btn.score-4:hover, .vote-btn.score-4.selected { background: var(--score4); color: white; border-color: var(--score4); }
+  
+  /* Results */
+  .result-item {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  
+  .result-item.vetoed {
+    opacity: 0.4;
+    border-color: #3a1515;
+  }
+  
+  .result-item.vetoed h3::after {
+    content: " 🚫 VETO";
+    color: var(--veto);
+    font-size: 13px;
+    font-weight: 500;
+  }
+  
+  .result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  
+  .result-score {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  
+  .result-bar-bg {
+    background: var(--bg3);
+    border-radius: 4px;
+    height: 8px;
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+  
+  .result-bar {
+    height: 8px;
+    border-radius: 4px;
+    background: var(--accent);
+    transition: width 0.5s;
+  }
+  
+  .result-meta {
+    font-size: 12px;
+    color: var(--text2);
+  }
+  
+  /* Status messages */
+  .status {
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 14px;
+  }
+  
+  .status.error { background: #2a1515; color: #f87171; border: 1px solid #5a2020; }
+  .status.success { background: #0d1f12; color: #4ade80; border: 1px solid #1a3d24; }
+  .status.info { background: #0f1c2e; color: #60a5fa; border: 1px solid #1e3a5f; }
+  
+  /* Token list */
+  .token-list {
+    list-style: none;
+    margin-top: 12px;
+  }
+  
+  .token-list li {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    font-family: monospace;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  
+  .token-used {
+    color: var(--text2);
+    font-size: 11px;
+    background: var(--bg);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  
+  .token-link {
+    color: var(--accent);
+    font-size: 12px;
+    word-break: break-all;
+  }
+  
+  /* Loading */
+  .loading {
+    text-align: center;
+    padding: 40px;
+    color: var(--text2);
+  }
+  
+  /* Divider */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 24px 0;
+  }
+  
+  /* Responsive */
+  @media (max-width: 500px) {
+    .vote-btn { min-width: 50px; font-size: 14px; }
+  }

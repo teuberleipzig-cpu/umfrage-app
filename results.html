@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ergebnisse – Umfrage-App</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="container">
+  <p><a href="index.html" style="color: var(--text2); text-decoration: none;">← Alle Umfragen</a></p>
+  <br>
+  <div id="app">
+    <div class="loading">Lade Ergebnisse...</div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getFirestore, collection, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+  // ERSETZE HIER DEINE FIREBASE CONFIG
+  const firebaseConfig = {
+    apiKey: "AIzaSyCV4oMSTOjg0QgfspLChFkNpUC--LRgUiQ",
+    authDomain: "bastipriv-6c734.firebaseapp.com",
+    projectId: "bastipriv-6c734",
+    storageBucket: "bastipriv-6c734.firebasestorage.app",
+    messagingSenderId: "202665372147",
+    appId: "1:202665372147:web:8b780a20b716dd375d4a86"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  const appEl = document.getElementById('app');
+  const params = new URLSearchParams(window.location.search);
+  const surveyId = params.get('survey');
+  const alreadyVoted = params.get('already') === '1';
+
+  async function loadResults() {
+    if (!surveyId) {
+      appEl.innerHTML = '<div class="status error">Keine Umfrage-ID angegeben.</div>';
+      return;
+    }
+
+    try {
+      // Umfrage laden
+      const allSurveys = await getDocs(collection(db, 'surveys'));
+      let surveyData = null;
+      allSurveys.forEach(d => { if (d.id === surveyId) surveyData = { id: d.id, ...d.data() }; });
+
+      if (!surveyData) {
+        appEl.innerHTML = '<div class="status error">Umfrage nicht gefunden.</div>';
+        return;
+      }
+
+      // Votes laden
+      const votesQuery = query(collection(db, 'votes'), where('surveyId', '==', surveyId));
+      const votesSnap = await getDocs(votesQuery);
+
+      const votes = [];
+      votesSnap.forEach(d => votes.push(d.data()));
+
+      renderResults(surveyData, votes);
+    } catch (err) {
+      appEl.innerHTML = `<div class="status error">Fehler: ${err.message}</div>`;
+    }
+  }
+
+  function renderResults(survey, votes) {
+    // Auswertung berechnen
+    const results = {}; // { optionName: { score: number, vetoes: number, voteCount: number } }
+
+    survey.options.forEach(opt => {
+      results[opt] = { score: 0, vetoes: 0, voteCount: 0 };
+    });
+
+    votes.forEach(vote => {
+      if (!vote.votes) return;
+      Object.entries(vote.votes).forEach(([option, value]) => {
+        if (!results[option]) return;
+        results[option].voteCount++;
+        if (value === 'veto') {
+          results[option].vetoes++;
+        } else {
+          results[option].score += Number(value);
+        }
+      });
+    });
+
+    // Sortieren: zuerst nicht-veto nach Score, dann veto-Optionen
+    const nonVeto = survey.options
+      .filter(opt => results[opt].vetoes === 0)
+      .sort((a, b) => results[b].score - results[a].score);
+
+    const vetoed = survey.options.filter(opt => results[opt].vetoes > 0);
+    const sorted = [...nonVeto, ...vetoed];
+
+    const maxScore = Math.max(...nonVeto.map(o => results[o].score), 1);
+
+    let html = '';
+
+    if (alreadyVoted) {
+      html += '<div class="status info">Du hast bereits abgestimmt. Hier sind die aktuellen Ergebnisse:</div>';
+    }
+
+    html += `
+      <h1>${escapeHtml(survey.title)}</h1>
+      <p class="subtitle">${votes.length} Abstimmung${votes.length !== 1 ? 'en' : ''} · Live-Ergebnisse</p>`;
+
+    if (votes.length === 0) {
+      html += '<div class="card"><p style="color: var(--text2)">Noch keine Abstimmungen eingegangen.</p></div>';
+    } else {
+      sorted.forEach((option, index) => {
+        const r = results[option];
+        const isVetoed = r.vetoes > 0;
+        const barWidth = isVetoed ? 0 : Math.round((r.score / maxScore) * 100);
+        const medal = !isVetoed && index < 3 ? ['🥇', '🥈', '🥉'][index] : '';
+
+        html += `
+          <div class="result-item ${isVetoed ? 'vetoed' : ''}">
+            <div class="result-header">
+              <h3>${medal} ${escapeHtml(option)}</h3>
+              <span class="result-score">${isVetoed ? '—' : r.score + ' Pkt.'}</span>
+            </div>
+            <div class="result-bar-bg">
+              <div class="result-bar" style="width: ${barWidth}%"></div>
+            </div>
+            <p class="result-meta">
+              ${isVetoed
+                ? `${r.vetoes} Veto${r.vetoes !== 1 ? 's' : ''} → eliminiert`
+                : `${r.voteCount} Stimme${r.voteCount !== 1 ? 'n' : ''} · Ø ${r.voteCount > 0 ? (r.score / r.voteCount).toFixed(1) : '—'}`
+              }
+            </p>
+          </div>`;
+      });
+    }
+
+    html += `
+      <hr class="divider">
+      <button class="btn btn-secondary" onclick="location.reload()">🔄 Aktualisieren</button>`;
+
+    appEl.innerHTML = html;
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  loadResults();
+</script>
+</body>
+</html>
