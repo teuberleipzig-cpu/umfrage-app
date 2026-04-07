@@ -46,11 +46,10 @@
     }
 
     try {
-      // 1. Token prüfen – direkt über tokenId-Feld suchen
+      // 1. Token suchen – nur nach tokenId-Feld (kein Index nötig)
       const tokenQuery = query(
         collection(db, 'tokens'),
-        where('tokenId', '==', tokenId),
-        where('surveyId', '==', surveyId)
+        where('tokenId', '==', tokenId)
       );
       const tokenSnap = await getDocs(tokenQuery);
 
@@ -59,7 +58,17 @@
         return;
       }
 
-      const tokenDoc = tokenSnap.docs[0];
+      // Richtiges Token-Dokument finden (mit passender surveyId)
+      let tokenDoc = null;
+      tokenSnap.forEach(d => {
+        if (d.data().surveyId === surveyId) tokenDoc = d;
+      });
+
+      if (!tokenDoc) {
+        appEl.innerHTML = '<div class="status error">❌ Dieser Link gehört zu einer anderen Umfrage.</div>';
+        return;
+      }
+
       tokenDocId = tokenDoc.id;
       const tokenData = tokenDoc.data();
 
@@ -69,15 +78,14 @@
         return;
       }
 
-      // 3. Prüfen ob für diesen Token schon ein Vote existiert (Sicherheitsnetz)
+      // 3. Sicherheitsnetz: Prüfen ob bereits ein Vote mit diesem Token existiert
       const existingVoteQuery = query(
         collection(db, 'votes'),
-        where('tokenId', '==', tokenId),
-        where('surveyId', '==', surveyId)
+        where('tokenId', '==', tokenId)
       );
       const existingVoteSnap = await getDocs(existingVoteQuery);
       if (!existingVoteSnap.empty) {
-        // Vote existiert bereits, aber Token war noch nicht als used markiert – jetzt nachholen
+        // Vote existiert, Token aber noch nicht als used markiert – nachholen
         await updateDoc(doc(db, 'tokens', tokenDocId), { used: true });
         window.location.href = `results.html?survey=${surveyId}&already=1`;
         return;
@@ -144,7 +152,7 @@
       return;
     }
 
-    // Button deaktivieren, damit nicht doppelt abgeschickt wird
+    // Button deaktivieren damit nicht doppelt abgeschickt wird
     const submitBtn = document.querySelector('.btn-primary');
     submitBtn.disabled = true;
     submitBtn.textContent = 'Wird gespeichert...';
